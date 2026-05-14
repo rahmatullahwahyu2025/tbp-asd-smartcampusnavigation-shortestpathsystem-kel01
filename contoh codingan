@@ -1,0 +1,44 @@
+dfs_order = bg.dfs(src)
+    t1 = time.perf_counter()
+    unreachable = bg.unreachable_from(src)
+    print(f"--- DFS dari '{src}' ---")
+    print(f"  Urutan: {' → '.join(dfs_order)}")
+    print(f"  Dikunjungi: {len(dfs_order)}/{V} ruang")
+    if unreachable:
+        print(f"  TIDAK terjangkau: {sorted(unreachable)}")
+    print(f"  Waktu: {(t1-t0)*1e6:.1f} µs")
+    print()
+
+# BFS dari 3 sumber berbeda
+for src in sources:
+    t0 = time.perf_counter()
+    bfs_order, dist = bg.bfs(src)
+    t1 = time.perf_counter()
+    print(f"--- BFS dari '{src}' (Shortest Distances) ---")
+    print(f"  Urutan: {' → '.join(bfs_order[:6])}{'...' if len(bfs_order)>6 else ''}")
+    print(f"  Jarak dari {src}:")
+    for room in sorted(dist, key=lambda r: dist[r]):
+        print(f"    {dist[room]} hop: {room}")
+    print(f"  Waktu: {(t1-t0)*1e6:.1f} µs")
+    print()
+
+# Shortest path queries
+print("--- SHORTEST PATH QUERIES ---")
+queries = [
+    ('GERBANG', 'PERPUSTAKAAN'),
+    ('GERBANG', 'KAFETARIA'),
+    ('LAB_DASAR', 'KELAS_C'),
+]
+for src, dst in queries:
+    path = bg.shortest_path(src, dst)
+    print(f"  {src} → {dst}:")
+    print(f"    Rute: {' → '.join(path)}")
+    print(f"    Panjang: {len(path)-1} koridor")
+print()
+
+# Kompleksitas
+print("--- ANALISIS BIG-O ---")
+print(f"  Adjacency List memori : O(V+E) = O({V+E}) unit")
+print(f"  Adjacency Matrix memori: O(V²) = O({V**2}) unit")
+print(f"  Rasio penghematan      : {V**2/(V+E):.1f}× lebih hemat")
+print(f"  DFS/BFS total          : O(V+E) = O({V+E})")
