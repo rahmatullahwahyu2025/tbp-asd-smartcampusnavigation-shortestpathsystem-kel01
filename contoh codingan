@@ -1,44 +1,320 @@
-dfs_order = bg.dfs(src)
-    t1 = time.perf_counter()
-    unreachable = bg.unreachable_from(src)
-    print(f"--- DFS dari '{src}' ---")
-    print(f"  Urutan: {' → '.join(dfs_order)}")
-    print(f"  Dikunjungi: {len(dfs_order)}/{V} ruang")
-    if unreachable:
-        print(f"  TIDAK terjangkau: {sorted(unreachable)}")
-    print(f"  Waktu: {(t1-t0)*1e6:.1f} µs")
-    print()
+import numpy as np
+import time
+from dataclasses import dataclass
+from typing import Optional, Dict, List, Tuple
 
-# BFS dari 3 sumber berbeda
-for src in sources:
-    t0 = time.perf_counter()
-    bfs_order, dist = bg.bfs(src)
-    t1 = time.perf_counter()
-    print(f"--- BFS dari '{src}' (Shortest Distances) ---")
-    print(f"  Urutan: {' → '.join(bfs_order[:6])}{'...' if len(bfs_order)>6 else ''}")
-    print(f"  Jarak dari {src}:")
-    for room in sorted(dist, key=lambda r: dist[r]):
-        print(f"    {dist[room]} hop: {room}")
-    print(f"  Waktu: {(t1-t0)*1e6:.1f} µs")
-    print()
+np.random.seed(7)
 
-# Shortest path queries
-print("--- SHORTEST PATH QUERIES ---")
-queries = [
-    ('GERBANG', 'PERPUSTAKAAN'),
-    ('GERBANG', 'KAFETARIA'),
-    ('LAB_DASAR', 'KELAS_C'),
+# --- Data gedung (30 node simulatif) ---
+GEDUNG_DATA = [
+    ('A1', 'Gerbang Utama'), ('A2', 'Rektorat'),
+    ('B1', 'FIB'),    ('B2', 'FT'),
+    ('B3', 'Lab Elektronika'), ('B4', 'Lab Komputer'),
+    ('C1', 'FMIPA'),  ('C2', 'Perpustakaan'),
+    ('D1', 'Stadion'),         ('D2', 'GOR'),
+    ('E1', 'FK'), ('E2', 'FIKK'),
+    ('F1', 'FEB'), ('F2', 'Kantin Pusat'),
+    ('G1', 'FISIP'),    ('G2', 'Masjid Kampus'),
+    ('H1', 'Pascasarjana'),    ('H2', 'Auditorium'),
+    ('I1', 'Lab Bahasa'),      ('I2', 'FBSB'),
+    ('J1', 'GYM'),    ('J2', 'Kantin'),
+    ('K1', 'Student Center'),  ('K2', 'Koperasi'),
+    ('L1', 'stadion'),     ('L2', 'Security Post'),
+    ('M1', 'Gedung Alumni'),   ('M2', 'Museum Pendidikan'),
+    ('N1', 'Bakso Pajero'),   ('N2', 'Tempat Parkir')
 ]
-for src, dst in queries:
-    path = bg.shortest_path(src, dst)
-    print(f"  {src} → {dst}:")
-    print(f"    Rute: {' → '.join(path)}")
-    print(f"    Panjang: {len(path)-1} koridor")
-print()
 
-# Kompleksitas
-print("--- ANALISIS BIG-O ---")
-print(f"  Adjacency List memori : O(V+E) = O({V+E}) unit")
-print(f"  Adjacency Matrix memori: O(V²) = O({V**2}) unit")
-print(f"  Rasio penghematan      : {V**2/(V+E):.1f}× lebih hemat")
-print(f"  DFS/BFS total          : O(V+E) = O({V+E})")
+# --- Edge berbobot acak ---
+def generate_edges(nodes, seed=7):
+    rng = np.random.default_rng(seed)
+    n = len(nodes)
+    edges = []
+    # Spanning tree acak agar terhubung
+    perm = rng.permutation(n)
+    for i in range(1, n):
+        u = nodes[perm[i-1]][0]
+        v = nodes[perm[i]][0]
+        w = int(rng.integers(50, 500))
+        edges.append((u, v, w))
+    
+    # Tambah edge tambahan untuk densitas
+    extra = int(n * 0.8) 
+    for _ in range(extra):
+        i, j = rng.choice(n, 2, replace=False)
+        w = int(rng.integers(50, 500))
+        edges.append((nodes[i][0], nodes[j][0], w))
+    return edges
+
+# --- Struktur Data Pendukung (Queue & Stack Linked List) ---
+class NodeLL:
+    def __init__(self, data):
+        self.data = data
+        self.next = None
+
+class QueueLL:
+    def __init__(self):
+        self.head = self.tail = None
+    def enqueue(self, data):
+        new_node = NodeLL(data)
+        if not self.tail:
+            self.head = self.tail = new_node
+            return
+        self.tail.next = new_node
+        self.tail = new_node
+    def dequeue(self):
+        if not self.head: return None
+        temp = self.head
+        self.head = self.head.next
+        if not self.head: self.tail = None
+        return temp.data
+    def is_empty(self): return self.head is None
+
+class StackLL:
+    def __init__(self):
+        self.top = None
+    def push(self, data):
+        new_node = NodeLL(data)
+        new_node.next = self.top
+        self.top = new_node
+    def pop(self):
+        if not self.top: return None
+        temp = self.top
+        self.top = self.top.next
+        return temp.data
+    def is_empty(self): return self.top is None
+
+# --- Graph (Adjacency List dengan Linked List) ---
+class EdgeNode:
+    def __init__(self, dest: str, bobot: int):
+        self.dest = dest
+        self.bobot = bobot
+        self.next: Optional['EdgeNode'] = None
+
+class Graph:
+    def __init__(self):
+        self.adj: Dict[str, Optional[EdgeNode]] = {}
+        self.node_names: Dict[str, str] = {}
+
+    def add_node(self, node_id: str, nama: str) -> None:
+        if node_id not in self.adj:
+            self.adj[node_id] = None
+            self.node_names[node_id] = nama
+
+    def add_edge(self, u: str, v: str, bobot: int) -> None:
+        # Graf tidak berarah: tambahkan u->v dan v->u
+        # Tambah ke head linked list O(1)
+        new_node_v = EdgeNode(v, bobot)
+        new_node_v.next = self.adj[u]
+        self.adj[u] = new_node_v
+
+        new_node_u = EdgeNode(u, bobot)
+        new_node_u.next = self.adj[v]
+        self.adj[v] = new_node_u
+
+    def neighbors(self, u: str) -> List[Tuple[str, int]]:
+        res = []
+        curr = self.adj.get(u)
+        while curr:
+            res.append((curr.dest, curr.bobot))
+            curr = curr.next
+        return res
+
+# --- Algoritma Navigasi ---
+def dijkstra(graph: Graph, source: str) -> Tuple[Dict[str, int], Dict[str, Optional[str]]]:
+    INF = float('inf')
+    dist = {v: INF for v in graph.adj}
+    parent = {v: None for v in graph.adj}
+    visited = set()
+    dist[source] = 0
+
+    # Implementasi array sederhana O(V^2)
+    for _ in range(len(graph.adj)):
+        u = None
+        min_dist = INF
+        for v in graph.adj:
+            if v not in visited and dist[v] < min_dist:
+                min_dist = dist[v]
+                u = v
+        
+        if u is None: break
+        visited.add(u)
+
+        curr = graph.adj[u]
+        while curr:
+            v, w = curr.dest, curr.bobot
+            if dist[u] + w < dist[v]:
+                dist[v] = dist[u] + w
+                parent[v] = u
+            curr = curr.next
+    return dist, parent
+
+def reconstruct_path(parent: Dict[str, Optional[str]], source: str, target: str) -> List[str]:
+    path = []
+    curr = target
+    while curr is not None:
+        path.append(curr)
+        if curr == source: break
+        curr = parent[curr]
+    return path[::-1] if path and path[-1] == source else []
+
+def bfs(graph: Graph, source: str) -> List[str]:
+    visited = {source}
+    queue = QueueLL()
+    queue.enqueue(source)
+    order = []
+    while not queue.is_empty():
+        u = queue.dequeue()
+        order.append(u)
+        curr = graph.adj[u]
+        while curr:
+            if curr.dest not in visited:
+                visited.add(curr.dest)
+                queue.enqueue(curr.dest)
+            curr = curr.next
+    return order
+
+def dfs(graph: Graph, source: str) -> List[str]:
+    visited = {source}
+    stack = StackLL()
+    stack.push(source)
+    order = []
+    while not stack.is_empty():
+        u = stack.pop()
+        order.append(u)
+        curr = graph.adj[u]
+        while curr:
+            if curr.dest not in visited:
+                visited.add(curr.dest)
+                stack.push(curr.dest)
+            curr = curr.next
+    return order
+
+# --- BST Direktori Gedung ---
+class BSTNode:
+    def __init__(self, key: str, nama: str):
+        self.key = key
+        self.nama = nama
+        self.left: Optional['BSTNode'] = None
+        self.right: Optional['BSTNode'] = None
+
+class BSTGedung:
+    def __init__(self):
+        self.root: Optional[BSTNode] = None
+
+    def insert(self, key: str, nama: str) -> None:
+        if not self.root:
+            self.root = BSTNode(key, nama)
+            return
+        curr = self.root
+        while True:
+            if key < curr.key:
+                if curr.left: curr = curr.left
+                else: 
+                    curr.left = BSTNode(key, nama)
+                    break
+            elif key > curr.key:
+                if curr.right: curr = curr.right
+                else:
+                    curr.right = BSTNode(key, nama)
+                    break
+            else: break # Key sudah ada
+
+    def search(self, key: str) -> Optional[str]:
+        curr = self.root
+        while curr:
+            if key == curr.key: return curr.nama
+            curr = curr.left if key < curr.key else curr.right
+        return None
+
+    def inorder(self) -> List[Tuple[str, str]]:
+        res = []
+        stack = StackLL()
+        curr = self.root
+        while not stack.is_empty() or curr:
+            if curr:
+                stack.push(curr)
+                curr = curr.left
+            else:
+                curr = stack.pop()
+                res.append((curr.key, curr.nama))
+                curr = curr.right
+        return res
+
+# --- Main CLI ---
+def main():
+    g = Graph()
+    bst = BSTGedung()
+    
+    for gid, gname in GEDUNG_DATA:
+        g.add_node(gid, gname)
+        bst.insert(gid, gname)
+    
+    edges = generate_edges(GEDUNG_DATA, seed=7)
+    for u, v, w in edges:
+        g.add_edge(u, v, w)
+    
+    print('Smart Campus Navigation System. Ketik BANTUAN untuk daftar perintah')
+    
+    while True:
+        try:
+            line = input("\n> ").strip().split()
+            if not line: continue
+            cmd = line[0].upper()
+
+            if cmd == "BANTUAN":
+                print("Perintah: TAMBAH_GEDUNG <id> <nama>, TAMBAH_JALAN <u> <v> <w>, JALUR <asal> <tujuan>,")
+                print("JELAJAH_DFS <id>, JELAJAH_BFS <id>, CARI_GEDUNG <id>, TERISOLASI, LAPORAN_GRAPH, KELUAR")
+
+            elif cmd == "TAMBAH_GEDUNG" and len(line) >= 3:
+                gid, gname = line[1], " ".join(line[2:])
+                g.add_node(gid, gname)
+                bst.insert(gid, gname)
+                print(f"Gedung {gid} ({gname}) ditambahkan. Big-O: O(log V) BST, O(1) Graph")
+
+            elif cmd == "TAMBAH_JALAN" and len(line) == 4:
+                u, v, w = line[1], line[2], int(line[3])
+                g.add_edge(u, v, w)
+                print(f"Jalan {u}-{v} jarak {w}m ditambahkan. Big-O: O(1)")
+
+            elif cmd == "JALUR" and len(line) == 3:
+                u, v = line[1], line[2]
+                dist, parent = dijkstra(g, u)
+                path = reconstruct_path(parent, u, v)
+                if path:
+                    print(f"Rute terpendek {u} -> {v}: {' -> '.join(path)}")
+                    print(f"Total jarak: {dist[v]} meter. Big-O: O(V^2 + E)")
+                else:
+                    print("Rute tidak ditemukan.")
+
+            elif cmd == "JELAJAH_DFS" and len(line) == 2:
+                res = dfs(g, line[1])
+                print(f"DFS: {' -> '.join(res)}. Big-O: O(V + E)")
+
+            elif cmd == "JELAJAH_BFS" and len(line) == 2:
+                res = bfs(g, line[1])
+                print(f"BFS: {' -> '.join(res)}. Big-O: O(V + E)")
+
+            elif cmd == "CARI_GEDUNG" and len(line) == 2:
+                nama = bst.search(line[1])
+                print(f"Hasil: {nama if nama else 'Tidak ditemukan'}. Big-O: O(log V)")
+
+            elif cmd == "TERISOLASI":
+                # Asumsi pintu masuk utama adalah 'A1' (Gerbang Utama)
+                reachable = set(bfs(g, 'A1'))
+                isolated = [node for node in g.adj if node not in reachable]
+                print(f"Gedung Terisolasi dari A1: {isolated if isolated else 'Tidak ada'}")
+
+            elif cmd == "LAPORAN_GRAPH":
+                all_bst = bst.inorder()
+                print(f"Total Gedung: {len(all_bst)}")
+                for gid, gname in all_bst:
+                    neighbors = g.neighbors(gid)
+                    print(f"[{gid}] {gname} -> Koneksi: {len(neighbors)}")
+
+            elif cmd == "KELUAR": break
+            else: print("Perintah tidak dikenal atau argumen kurang.")
+        except Exception as e:
+            print(f"Error: {e}")
+
+if __name__ == '__main__':
+    main()
