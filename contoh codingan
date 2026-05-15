@@ -1,54 +1,83 @@
-# --- Main CLI ---
-def main():
-    g = Graph()
-    bst = BSTGedung()
+import random
+import time
+from dataclasses import dataclass
+from typing import Optional, Dict, List, Tuple
+
+# --- Data gedung (30 node simulatif) ---
+GEDUNG_DATA = [
+    ('A1', 'Gerbang Utama'), ('A2', 'Rektorat'),
+    ('B1', 'FIB'),    ('B2', 'FT'),
+    ('B3', 'Lab Elektronika'), ('B4', 'Lab Komputer'),
+    ('C1', 'FMIPA'),  ('C2', 'Perpustakaan'),
+    ('D1', 'Stadion'),         ('D2', 'GOR'),
+    ('E1', 'FK'), ('E2', 'FIKK'),
+    ('F1', 'FEB'), ('F2', 'Kantin Pusat'),
+    ('G1', 'FISIP'),    ('G2', 'Masjid Kampus'),
+    ('H1', 'Pascasarjana'),    ('H2', 'Auditorium'),
+    ('I1', 'Lab Bahasa'),      ('I2', 'FBSB'),
+    ('J1', 'GYM'),    ('J2', 'Kantin'),
+    ('K1', 'Student Center'),  ('K2', 'Koperasi'),
+    ('L1', 'stadion'),     ('L2', 'Security Post'),
+    ('M1', 'Gedung Alumni'),   ('M2', 'Museum Pendidikan'),
+    ('N1', 'Bakso Pajero'),   ('N2', 'Tempat Parkir')
+]
+
+# --- Edge berbobot acak (Menggunakan Bawaan Python 'random') ---
+def generate_edges(nodes, seed=7):
+    random.seed(seed)
+    n = len(nodes)
+    edges = []
     
-    for gid, gname in GEDUNG_DATA:
-        g.add_node(gid, gname)
-        bst.insert(gid, gname)
+    indices = list(range(n))
+    random.shuffle(indices)
     
-    edges = generate_edges(GEDUNG_DATA, seed=7)
-    for u, v, w in edges:
-        g.add_edge(u, v, w)
+    for i in range(1, n):
+        u = nodes[indices[i-1]][0]
+        v = nodes[indices[i]][0]
+        w = random.randint(50, 500)
+        edges.append((u, v, w))
     
-    print('Smart Campus Navigation System. Ketik BANTUAN untuk daftar perintah')
-    
-    while True:
-        try:
-            line = input("\n> ").strip().split()
-            if not line: continue
-            cmd = line[0].upper()
+    extra = int(n * 0.8) 
+    for _ in range(extra):
+        i, j = random.sample(range(n), 2)
+        w = random.randint(50, 500)
+        edges.append((nodes[i][0], nodes[j][0], w))
+    return edges
 
-            if cmd == "BANTUAN":
-                print("Perintah: TAMBAH_GEDUNG <id> <nama>, TAMBAH_JALAN <u> <v> <w>, JALUR <asal> <tujuan>,")
-                print("JELAJAH_DFS <id>, JELAJAH_BFS <id>, CARI_GEDUNG <id>, TERISOLASI, LAPORAN_GRAPH, KELUAR")
+# --- Struktur Data Pendukung (Queue & Stack Linked List) ---
+class NodeLL:
+    def __init__(self, data):
+        self.data = data
+        self.next = None
 
-            elif cmd == "TAMBAH_GEDUNG" and len(line) >= 3:
-                gid, gname = line[1], " ".join(line[2:])
-                g.add_node(gid, gname)
-                bst.insert(gid, gname)
-                print(f"Gedung {gid} ({gname}) ditambahkan. Big-O: O(log V) BST, O(1) Graph")
+class QueueLL:
+    def __init__(self):
+        self.head = self.tail = None
+    def enqueue(self, data):
+        new_node = NodeLL(data)
+        if not self.tail:
+            self.head = self.tail = new_node
+            return
+        self.tail.next = new_node
+        self.tail = new_node
+    def dequeue(self):
+        if not self.head: return None
+        temp = self.head
+        self.head = self.head.next
+        if not self.head: self.tail = None
+        return temp.data
+    def is_empty(self): return self.head is None
 
-            elif cmd == "TAMBAH_JALAN" and len(line) == 4:
-                u, v, w = line[1], line[2], int(line[3])
-                g.add_edge(u, v, w)
-                print(f"Jalan {u}-{v} jarak {w}m ditambahkan. Big-O: O(1)")
-            
-            elif cmd == "KELUAR":
-                print("Keluar dari program. Terima kasih!")
-                break
-            
-            else:
-                print("Perintah tidak dikenali. Ketik BANTUAN untuk melihat daftar perintah.")
-
-        # Menambahkan blok except yang diminta oleh Python
-        except ValueError:
-            print("Error: Format angka salah (misalnya jarak jalan harus berupa angka).")
-        except (KeyboardInterrupt, EOFError):
-            print("\nProgram dihentikan secara paksa.")
-            break
-        except Exception as e:
-            print(f"Terjadi kesalahan: {e}")
-
-if __name__ == "__main__":
-    main()
+class StackLL:
+    def __init__(self):
+        self.top = None
+    def push(self, data):
+        new_node = NodeLL(data)
+        new_node.next = self.top
+        self.top = new_node
+    def pop(self):
+        if not self.top: return None
+        temp = self.top
+        self.top = self.top.next
+        return temp.data
+    def is_empty(self):
