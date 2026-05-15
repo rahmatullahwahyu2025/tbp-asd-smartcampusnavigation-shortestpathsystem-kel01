@@ -15,3 +15,4 @@ GEDUNG_DATA = [
     ('M1', 'Gedung Alumni'),   ('M2', 'Museum Pendidikan'),
     ('N1', 'Bakso Pajero'),   ('N2', 'Tempat Parkir')
 ]
+
