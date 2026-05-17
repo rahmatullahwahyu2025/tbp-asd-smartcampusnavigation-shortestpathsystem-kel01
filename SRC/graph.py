@@ -1,5 +1,78 @@
 from typing import Optional, Dict, List, Tuple
-from data_structures import EdgeNode, QueueLL, StackLL
+
+# =====================================================================
+# 1. IMPLEMENTASI STRUKTUR DATA PENDUKUNG (data_structures)
+# =====================================================================
+
+class EdgeNode:
+    """Node untuk melambangkan edge dalam adjacency list graph berbobot."""
+    def __init__(self, dest: str, bobot: int):
+        self.dest: str = dest
+        self.bobot: int = bobot
+        self.next: Optional['EdgeNode'] = None
+
+
+class QueueNode:
+    def __init__(self, data: str):
+        self.data: str = data
+        self.next: Optional['QueueNode'] = None
+
+class QueueLL:
+    """Queue menggunakan Linked List untuk menunjang algoritma BFS."""
+    def __init__(self):
+        self.front: Optional[QueueNode] = None
+        self.rear: Optional[QueueNode] = None
+
+    def enqueue(self, data: str) -> None:
+        new_node = QueueNode(data)
+        if self.rear is None:
+            self.front = self.rear = new_node
+            return
+        self.rear.next = new_node
+        self.rear = new_node
+
+    def dequeue(self) -> str:
+        if self.is_empty():
+            raise IndexError("Dequeue dari queue yang kosong")
+        temp = self.front
+        self.front = temp.next # type: ignore
+        if self.front is None:
+            self.rear = None
+        return temp.data # type: ignore
+
+    def is_empty(self) -> bool:
+        return self.front is None
+
+
+class StackNode:
+    def __init__(self, data: str):
+        self.data: str = data
+        self.next: Optional['StackNode'] = None
+
+class StackLL:
+    """Stack menggunakan Linked List untuk menunjang algoritma DFS."""
+    def __init__(self):
+        self.top: Optional[StackNode] = None
+
+    def push(self, data: str) -> None:
+        new_node = StackNode(data)
+        new_node.next = self.top
+        self.top = new_node
+
+    def pop(self) -> str:
+        if self.is_empty():
+            raise IndexError("Pop dari stack yang kosong")
+        popped = self.top.data # type: ignore
+        self.top = self.top.next # type: ignore
+        return popped
+
+    def is_empty(self) -> bool:
+        return self.top is None
+
+
+# =====================================================================
+# 2. STRUKTUR DATA GRAPH & ALGORITMA (Kode Asli Kamu)
+# =====================================================================
 
 class Graph:
     def __init__(self):
@@ -103,3 +176,5 @@ def dfs(graph: Graph, source: str) -> List[str]:
                 if v not in visited:
                     stack.push(v)
     return result
+
+
