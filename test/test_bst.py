@@ -60,3 +60,19 @@ class BSTGedung:
 
 
 
+if __name__ == "__main__":
+    bst = BSTGedung()
+    
+    # Masukkan data
+    bst.insert("GD03", "Gedung Rektorat")
+    bst.insert("GD01", "Gedung Filkom")
+    bst.insert("GD05", "Gedung Teknik")
+    
+    # Uji Pencarian (Search)
+    print("=== Hasil Pencarian ===")
+    print("Cari GD01:", bst.search("GD01"))
+    print("Cari GD04:", bst.search("GD04")) # Harusnya None karena tidak ada
+    
+    print("\n=== Hasil Inorder Traversal ===")
+    # Uji Cetak Berurutan (Inorder)
+    print(bst.inorder())

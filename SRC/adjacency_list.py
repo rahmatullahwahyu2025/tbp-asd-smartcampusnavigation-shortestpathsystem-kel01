@@ -40,3 +40,42 @@ class Graph:
             curr = curr.next
         return res
 
+# =====================================================================
+# CONTOH INPUT UNTUK MENJALANKAN GRAPH
+# =====================================================================
+if __name__ == "__main__":
+    # 1. Membuat objek Graph
+    peta_jawa = Graph()
+
+    # 2. Menambahkan Node (node_id, nama_kota)
+    peta_jawa.add_node("JKT", "Jakarta")
+    peta_jawa.add_node("BDG", "Bandung")
+    peta_jawa.add_node("YOG", "Yogyakarta")
+    peta_jawa.add_node("SUB", "Surabaya")
+
+    # 3. Menambahkan Edge/Hubungan antar kota beserta bobotnya (misal: jarak dalam km)
+    # Karena ini Undirected Graph, hubungan otomatis berlaku bolak-balik
+    peta_jawa.add_edge("JKT", "BDG", 150)   # Jakarta <-> Bandung
+    peta_jawa.add_edge("JKT", "YOG", 550)   # Jakarta <-> Yogyakarta
+    peta_jawa.add_edge("BDG", "YOG", 400)   # Bandung <-> Yogyakarta
+    peta_jawa.add_edge("YOG", "SUB", 320)   # Yogyakarta <-> Surabaya
+
+    # 4. Melakukan Cek Tetangga (Neighbors) dari masing-masing kota
+    print("=== DAFTAR KOTA DAN TETANGGANYA ===\n")
+    
+    list_kota = ["JKT", "BDG", "YOG", "SUB"]
+    
+    for kota_id in list_kota:
+        nama_asal = peta_jawa.node_names[kota_id]
+        print(f"Kota: {nama_asal} ({kota_id})")
+        
+        # Mengambil semua tetangga dari kota_id
+        daftar_tetangga = peta_jawa.neighbors(kota_id)
+        
+        if not daftar_tetangga:
+            print("  (Tidak memiliki jalur ke kota lain)")
+        else:
+            for tetangga_id, bobot in daftar_tetangga:
+                nama_tetangga = peta_jawa.node_names[tetangga_id]
+                print(f"  -> Terhubung ke: {nama_tetangga} ({tetangga_id}) | Jarak: {bobot} km")
+        print("-" * 50)
